@@ -17,12 +17,16 @@ package com.google.engedu.wordstack;
 
 import android.content.res.AssetManager;
 import android.graphics.Color;
+import android.os.WorkSource;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
+import android.util.SparseArray;
 import android.view.DragEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -31,20 +35,24 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Random;
 import java.util.Stack;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final int WORD_LENGTH = 3;
+    private static Random random = new Random();
+    private int WORD_LENGTH;
     public static final int LIGHT_BLUE = Color.rgb(176, 200, 255);
     public static final int LIGHT_GREEN = Color.rgb(200, 255, 200);
-    private ArrayList<String> words = new ArrayList<>();
+    private HashMap<Integer, ArrayList<String>> words = new HashMap<>();
+    private HashMap<Integer, HashSet<String>> wordsSet = new HashMap<>();
     private Stack<LetterTile> placedTiles = new Stack<>();
-    private Random random = new Random();
     private StackedLayout stackedLayout;
-    private String word1, word2;
+    private String word1, word2, foundWord1, foundWord2;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,10 +63,15 @@ public class MainActivity extends AppCompatActivity {
             InputStream inputStream = assetManager.open("words.txt");
             BufferedReader in = new BufferedReader(new InputStreamReader(inputStream));
             String line = null;
+            for(int i = 3; i <= 6; ++i) {
+                words.put(i, new ArrayList<String>());
+                wordsSet.put(i, new HashSet<String>());
+            }
             while((line = in.readLine()) != null) {
                 String word = line.trim();
-                if(word.length() == WORD_LENGTH) {
-                    words.add(word);
+                if(word.length() >= 3 && word.length() <= 6) {
+                    words.get(word.length()).add(word);
+                    wordsSet.get(word.length()).add(word);
                 }
             }
         } catch (IOException e) {
@@ -68,6 +81,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout verticalLayout = (LinearLayout) findViewById(R.id.vertical_layout);
         stackedLayout = new StackedLayout(this);
         verticalLayout.addView(stackedLayout, 3);
+        findViewById(R.id.button).setEnabled(false);
 
         View word1LinearLayout = findViewById(R.id.word1);
         //word1LinearLayout.setOnTouchListener(new TouchListener());
@@ -121,9 +135,19 @@ public class MainActivity extends AppCompatActivity {
                     LetterTile tile = (LetterTile) event.getLocalState();
                     tile.moveToViewGroup((ViewGroup) v);
                     placedTiles.push(tile);
-                    if (stackedLayout.empty()) {
+                    if(v == findViewById(R.id.word1))
+                        foundWord1 += tile.getLetter();
+                    else
+                        foundWord2 += tile.getLetter();
+                    findViewById(R.id.button).setEnabled(true);
+                    if(stackedLayout.empty()) {
+                        if(wordsSet.get(WORD_LENGTH).contains(foundWord1) && wordsSet.get(WORD_LENGTH).contains(foundWord2)) {
+                            word1 = foundWord1;
+                            word2 = foundWord2;
+                        }
                         TextView messageBox = (TextView) findViewById(R.id.message_box);
-                        messageBox.setText(word1 + " " + word2);
+                        messageBox.setText(word1 + "  " + word2);
+                        findViewById(R.id.button).setEnabled(false);
                     }
                     return true;
             }
@@ -138,18 +162,35 @@ public class MainActivity extends AppCompatActivity {
         word2LinearLayout.removeAllViews();
         stackedLayout.clear();
         while(!placedTiles.empty()) placedTiles.pop();
+        foundWord1 = foundWord2 = "";
+        WORD_LENGTH = random.nextInt(4) + 3;
+        int word1Run = 0, word2Run = 0;
 
         TextView messageBox = (TextView) findViewById(R.id.message_box);
-        messageBox.setText("Game started");
-        word1 = words.get(random.nextInt(words.size()));
-        word2 = words.get(random.nextInt(words.size()));
+        messageBox.setText("Game started" + " | Drag the letters to the below boxes to form two " + WORD_LENGTH + "-lettered words");
+        word1 = words.get(WORD_LENGTH).get(random.nextInt(words.get(WORD_LENGTH).size()));
+        word2 = words.get(WORD_LENGTH).get(random.nextInt(words.get(WORD_LENGTH).size()));
         StringBuilder word = new StringBuilder(WORD_LENGTH*2);
         int i = 0, j = 0;
         while(i < WORD_LENGTH && j < WORD_LENGTH) {
+            if(word1Run == 2) {
+                word.append(word2.charAt(j++));
+                word1Run = 0;
+                word2Run = 1;
+                continue;
+            }
+            if(word2Run == 2) {
+                word.append(word1.charAt(i++));
+                word1Run = 1;
+                word2Run = 0;
+                continue;
+            }
             if(random.nextInt(2) == 0) {
                 word.append(word1.charAt(i++));
+                ++word1Run;
             } else {
                 word.append(word2.charAt(j++));
+                ++word2Run;
             }
         }
         while(i < WORD_LENGTH) {
@@ -167,8 +208,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public boolean onUndo(View view) {
-        if(!placedTiles.empty())
+        if(!placedTiles.empty()) {
+            ViewGroup v = (ViewGroup)placedTiles.peek().getParent();
             placedTiles.pop().moveToViewGroup(stackedLayout);
+            if(v == findViewById(R.id.word1))
+                foundWord1 = foundWord1.substring(0, foundWord1.length()-1);
+            else
+                foundWord2 = foundWord2.substring(0, foundWord2.length()-1);
+            if(placedTiles.empty())
+                findViewById(R.id.button).setEnabled(false);
+        }
         return true;
     }
 }
