@@ -46,6 +46,8 @@ public class LetterTile extends AppCompatTextView {
         setBackgroundColor(Color.rgb(255, 255, 200));
     }
 
+    public char getLetter() { return letter; }
+
     public void moveToViewGroup(ViewGroup targetView) {
         ViewParent parent = getParent();
         if (parent instanceof StackedLayout ) {
